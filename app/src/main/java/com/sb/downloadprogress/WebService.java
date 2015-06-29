@@ -38,7 +38,7 @@ public class WebService {
      * else errorMessage
      * @return JSONArray if attachmentsData is returned from the server
      */
-    public static Object returnAttachmentsData() {
+    public Object returnAttachmentsData() {
         Object dataToBeReturned = null;
         HttpURLConnection httpURLConnection = null;
         try {
