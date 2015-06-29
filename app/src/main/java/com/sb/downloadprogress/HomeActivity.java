@@ -6,7 +6,6 @@ import android.content.DialogInterface;
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -36,7 +35,7 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
     private int numberOfDownloadsInProgress = 0;
 
     // maximum number of downloads allowed
-    private int maxNoOfDownloadsAllowed = 2;
+    private int maxNoOfDownloadsAllowed = 10;
 
     // for faster access of attachments which are queued
     private ArrayList<Attachment> downloadQueueArray = new ArrayList<Attachment>();
