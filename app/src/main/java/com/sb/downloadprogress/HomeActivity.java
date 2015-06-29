@@ -236,32 +236,6 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
     }
 
     /**
-     * sort button is clicked
-     * @param view view
-     */
-    public void sortButtonClicked(View view) {
-        // create and show toast
-        Toast toast = Toast.makeText(getApplicationContext(), R.string.sorted, Toast.LENGTH_SHORT);
-        toast.show();
-
-        if (sortByIdentifier == 2) {// set to 0
-            sortByIdentifier = 0;
-        } else { // increment identifier
-            sortByIdentifier = sortByIdentifier + 1;
-        }
-        // get attachmentAdapter
-        AttachmentAdapter attachmentAdapter = (AttachmentAdapter) attachmentsListView.getAdapter();
-        // sortByIdentifierValue
-        String sortByIdentifierValue = attachmentAdapter.sortBy.get(sortByIdentifier);
-        // sort
-        attachmentAdapter.attachments = helperService.sortAttachments(attachmentAdapter.attachments, sortByIdentifierValue);
-        // notify data set changed
-        attachmentAdapter.notifyDataSetChanged();
-        // update title
-        setTitle(attachmentAdapter.HOME_ACTIVITY_TITLE + " " + sortByIdentifierValue);
-    }
-
-    /**
      * Delete attachment
      * @param attachment object
      */
@@ -312,6 +286,63 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
         } else {
             // no need to do anything right now...
         }
+    }
+
+    /**
+     * sort button is clicked
+     * @param view view
+     */
+    public void sortButtonClicked(View view) {
+        // create and show toast
+        Toast toast = Toast.makeText(getApplicationContext(), R.string.sorted, Toast.LENGTH_SHORT);
+        toast.show();
+
+        if (sortByIdentifier == 2) {// set to 0
+            sortByIdentifier = 0;
+        } else { // increment identifier
+            sortByIdentifier = sortByIdentifier + 1;
+        }
+        // get attachmentAdapter
+        AttachmentAdapter attachmentAdapter = (AttachmentAdapter) attachmentsListView.getAdapter();
+        // sortByIdentifierValue
+        String sortByIdentifierValue = attachmentAdapter.sortBy.get(sortByIdentifier);
+        // sort
+        attachmentAdapter.attachments = helperService.sortAttachments(attachmentAdapter.attachments, sortByIdentifierValue);
+        // notify data set changed
+        attachmentAdapter.notifyDataSetChanged();
+        // update title
+        setTitle(attachmentAdapter.HOME_ACTIVITY_TITLE + " " + sortByIdentifierValue);
+    }
+
+    /**
+     * refresh button is clicked
+     */
+    public void refreshButtonClicked(View view) {
+        // create and show toast
+        Toast toast = Toast.makeText(getApplicationContext(), R.string.refreshing, Toast.LENGTH_SHORT);
+        toast.show();
+        // cancel all DownloadAttachmentTasks
+        for (DownloadAttachmentTask downloadAttachmentTask : downloadAttachmentTaskForAttachmentIndex.values()) {
+            if (downloadAttachmentTask != null) {
+                if (downloadAttachmentTask.getStatus() == AsyncTask.Status.RUNNING) {
+                    // cancel downloadAttachmentTask
+                    downloadAttachmentTask.cancel(true);
+                }
+            }
+        }
+        // empty previous DownloadAttachmentTask related data
+        downloadAttachmentTaskForAttachmentIndex = new HashMap<Attachment, DownloadAttachmentTask>();
+        downloadQueueArray = new ArrayList<Attachment>();
+        numberOfDownloadsInProgress = 0;
+        // deleteAllAttachmentsFromDevice
+        deleteAllAttachmentsFromDevice();
+        // empty current attachments
+        AttachmentAdapter attachmentAdapter = (AttachmentAdapter) attachmentsListView.getAdapter();
+        attachmentAdapter.attachments = new ArrayList<Attachment>();
+        // drop Attachment table
+        dbHelper.dropAndCreateAttachmentTable();
+        // download JSON again from the server
+        attachmentAdapter.checkIfAttachmentsHaveToBeDownloadedFromWebServer(context, HomeActivity.this);
     }
 
     /**
