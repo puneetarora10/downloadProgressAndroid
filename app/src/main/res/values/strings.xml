@@ -3,4 +3,15 @@
 
     <string name="hello_world">Hello world!</string>
     <string name="action_settings">Settings</string>
+
+    <!-- HomeActivity -->
+    <string name="sort_button">Sort</string>
+    <string name="refresh_button">Refresh</string>
+    <!-- AlertDialog -->
+    <string name="choose_an_action">Choose?</string>
+    <string name="choose_an_action_Message">Please click on a Button</string>
+    <!-- Toast -->
+    <string name="refreshing">Refreshing&#8230;</string>
+    <string name="sorted">Sorted&#8230;</string>
+
 </resources>
