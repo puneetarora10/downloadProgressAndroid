@@ -12,6 +12,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -232,6 +233,32 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
             File file = new File(getFilesDir() + "/" + attachment.getLocalName());
             Boolean success = file.delete();
         }
+    }
+
+    /**
+     * sort button is clicked
+     * @param view view
+     */
+    public void sortButtonClicked(View view) {
+        // create and show toast
+        Toast toast = Toast.makeText(getApplicationContext(), R.string.sorted, Toast.LENGTH_SHORT);
+        toast.show();
+
+        if (sortByIdentifier == 2) {// set to 0
+            sortByIdentifier = 0;
+        } else { // increment identifier
+            sortByIdentifier = sortByIdentifier + 1;
+        }
+        // get attachmentAdapter
+        AttachmentAdapter attachmentAdapter = (AttachmentAdapter) attachmentsListView.getAdapter();
+        // sortByIdentifierValue
+        String sortByIdentifierValue = attachmentAdapter.sortBy.get(sortByIdentifier);
+        // sort
+        attachmentAdapter.attachments = helperService.sortAttachments(attachmentAdapter.attachments, sortByIdentifierValue);
+        // notify data set changed
+        attachmentAdapter.notifyDataSetChanged();
+        // update title
+        setTitle(attachmentAdapter.HOME_ACTIVITY_TITLE + " " + sortByIdentifierValue);
     }
 
     /**
