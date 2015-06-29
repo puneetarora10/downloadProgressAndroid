@@ -1,9 +1,12 @@
 package com.sb.downloadprogress;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -11,6 +14,7 @@ import android.widget.AdapterView;
 import android.widget.ListView;
 
 import java.io.BufferedInputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.net.HttpURLConnection;
 import java.util.ArrayList;
@@ -97,7 +101,190 @@ public class HomeActivity extends AppCompatActivity implements AdapterView.OnIte
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        // find attachment for row selected
+        final Attachment attachment = returnAttachmentsListUsingAttachmentAdapter().get(position);
+        // show alertDialog
+        AlertDialog.Builder builder = new AlertDialog.Builder(HomeActivity.this);
+        builder.setTitle(R.string.choose_an_action);
+        builder.setMessage(R.string.choose_an_action_Message);
+        builder.setCancelable(true);
+        // add Cancel button
+        builder.setNeutralButton(CANCEL_BUTTON_TITLE,
+                new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int id) {
+                        // cancel the dialog. no need to do anything else
+                    }
+                });
+        // add Download/ Pause/ Resume button
+        if (!attachment.getDownloadCompleted()) {// only if downloadCompleted = NO else just show Delete and Cancel buttons
+            // to check if pause button is played
+            Boolean _pauseButtonDisplayed = false;
+            String downloadButtonTitle = DOWNLOAD_BUTTON_TITLE;
+            if (attachment.getDownloadInProgress()) {
+                downloadButtonTitle = PAUSE_BUTTON_TITLE;
+                _pauseButtonDisplayed = true;
+            } else if (attachment.getDownloadPaused()) {
+                downloadButtonTitle = RESUME_BUTTON_TITLE;
+            }
+            // to check if pause button is played
+            final Boolean pauseButtonDisplayed = _pauseButtonDisplayed;
+            // add this button as neutral button
+            builder.setNegativeButton(downloadButtonTitle, new DialogInterface.OnClickListener() {
+                public void onClick(DialogInterface dialog, int id) {
+                    if (pauseButtonDisplayed) {
+                        pauseAttachment(attachment);
+                    } else {
+                        downloadOrResumeAttachment(attachment);
+                    }
+                }
+            });
+        }
+        // add Delete Button
+        builder.setPositiveButton(DELETE_BUTTON_TITLE, new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int id) {
+                deleteAttachment(attachment);
+            }
+        });
+        AlertDialog alertDialog = builder.create();
+        alertDialog.show();
+    }
 
+    /**
+     * if numberOfDownloadsInProgress < maxNoOfDownloadsAllowed then download/ resume attachment
+     * else add it to downloadQueueArray
+     *
+     * @param attachment object
+     */
+    private void downloadOrResumeAttachment(Attachment attachment) {
+        if (numberOfDownloadsInProgress < maxNoOfDownloadsAllowed) {// start download
+            // increment numberOfDownloadsInProgress and update downloadInProgress
+            numberOfDownloadsInProgress++;
+            attachment.setDownloadInProgress(true);
+            // start DownloadAttachmentTask and add that task to attachmentDownloadAttachmentTask HashMap
+            DownloadAttachmentTask downloadAttachmentTask = new DownloadAttachmentTask(context);
+            downloadAttachmentTaskForAttachmentIndex.put(attachment, downloadAttachmentTask);
+            downloadAttachmentTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, attachment);
+        } else {// add it to queue and update attachment's downloadQueued
+            attachment.setDownloadQueued(true);
+            attachment.setDownloadPaused(false);
+            downloadQueueArray.add(attachment);
+            // show alertDialog indicating the file has been Queued..
+            helperService.showAlertDialog("Queued", "Exceeded maximum no of downloads. So this download is queued!", "Ok", HomeActivity.this);
+        }
+        int attachmentIndex = returnAttachmentsListUsingAttachmentAdapter().indexOf(attachment);
+        // check if view at attachmentIndex is visible
+        if (checkIfViewIsVisibleInAttachmentsListView(attachmentIndex)) {
+            // get entire view
+            View attachmentItemView = attachmentsListView.getChildAt(attachmentIndex - attachmentsListView.getFirstVisiblePosition());
+            AttachmentAdapter attachmentAdapter = (AttachmentAdapter) attachmentsListView.getAdapter();
+            // updateFileSizeOrStatusTextView
+            attachmentAdapter.updateFileSizeOrStatusTextView(attachmentItemView, attachment);
+        }
+
+        // persist data
+        persistData();
+    }
+
+    /**
+     * Pause attachment's download
+     * @param attachment object
+     */
+    private void pauseAttachment(Attachment attachment) {
+        // cancel DownloadAttachmentTask if it exists for this attachment
+        DownloadAttachmentTask downloadAttachmentTask = downloadAttachmentTaskForAttachmentIndex.get(attachment);
+        if (downloadAttachmentTask != null) {
+            if (downloadAttachmentTask.getStatus() == AsyncTask.Status.RUNNING) {
+                // cancel downloadAttachmentTask
+                downloadAttachmentTask.cancel(true);
+            }
+        }
+        // update attachment's properties
+        attachment.setDownloadInProgress(false);
+        attachment.setDownloadPaused(true);
+        // set fileSizeToBeIgnored to ignore bytes which have already been written
+        attachment.setFileSizeToBeIgnored(attachment.getLocalFileSize());
+        // decrement numberOfDownloadsInProgress
+        numberOfDownloadsInProgress--;
+        // check if view at attachmentIndex is visible
+        int attachmentIndex = returnAttachmentsListUsingAttachmentAdapter().indexOf(attachment);
+        if (checkIfViewIsVisibleInAttachmentsListView(attachmentIndex)) {
+            // get entire view
+            View attachmentItemView = attachmentsListView.getChildAt(attachmentIndex - attachmentsListView.getFirstVisiblePosition());
+            AttachmentAdapter attachmentAdapter = (AttachmentAdapter) attachmentsListView.getAdapter();
+            // update fileSizeOrStatusTextView
+            attachmentAdapter.updateFileSizeOrStatusTextView(attachmentItemView, attachment);
+        }
+
+        // persist data
+        persistData();
+        // startDownloadingQueuedAttachments
+        startDownloadingQueuedAttachments();
+    }
+
+    /**
+     * deletes all attachment from device
+     * for now just being called when refresh is clicked
+     */
+    private void deleteAllAttachmentsFromDevice() {
+        // loop through attachments
+        for (Attachment attachment : returnAttachmentsListUsingAttachmentAdapter()) {
+            // delete the file
+            File file = new File(getFilesDir() + "/" + attachment.getLocalName());
+            Boolean success = file.delete();
+        }
+    }
+
+    /**
+     * Delete attachment
+     * @param attachment object
+     */
+    private void deleteAttachment(Attachment attachment) {
+        // cancel DownloadAttachmentTask if it exists for this attachment
+        int attachmentIndex = returnAttachmentsListUsingAttachmentAdapter().indexOf(attachment);
+        DownloadAttachmentTask downloadAttachmentTask = downloadAttachmentTaskForAttachmentIndex.get(attachment);
+        if (downloadAttachmentTask != null) {
+            if (downloadAttachmentTask.getStatus() == AsyncTask.Status.RUNNING) {// user deleted the attachment while it was getting downloaded
+                // cancel downloadAttachmentTask
+                downloadAttachmentTask.cancel(true);
+                // decrement numberOfDownloadsInProgress
+                if (numberOfDownloadsInProgress > 0) {
+                    numberOfDownloadsInProgress = numberOfDownloadsInProgress - 1;
+                }
+            }
+        }
+
+        // delete the file
+        File file = new File(getFilesDir() + "/" + attachment.getLocalName());
+        Boolean success = file.delete();
+
+        if (success) {// file has been deleted
+            // update attachment
+            attachment.setDownloadCompleted(false);
+            attachment.setDownloadInProgress(false);
+            attachment.setDownloadPaused(false);
+            attachment.setLocalFileSize(0);
+            attachment.setTotalLength(0);
+
+            // show alertDialog indicating the file has been deleted..
+            helperService.showAlertDialog("File Deleted!", "", "Ok", HomeActivity.this);
+            // check if view at attachmentIndex is visible
+            if (checkIfViewIsVisibleInAttachmentsListView(attachmentIndex)) {
+                // get entire view
+                View attachmentItemView = attachmentsListView.getChildAt(attachmentIndex - attachmentsListView.getFirstVisiblePosition());
+                AttachmentAdapter attachmentAdapter = (AttachmentAdapter) attachmentsListView.getAdapter();
+                // update downloadProgressBar
+                attachmentAdapter.updateProgressForDownloadProgressBar(attachmentItemView, attachment);
+                // update fileSizeOrStatusTextView
+                attachmentAdapter.updateFileSizeOrStatusTextView(attachmentItemView, attachment);
+            }
+
+            // persist data
+            persistData();
+            // startDownloadingQueuedAttachments if possible
+            startDownloadingQueuedAttachments();
+        } else {
+            // no need to do anything right now...
+        }
     }
 
     /**
